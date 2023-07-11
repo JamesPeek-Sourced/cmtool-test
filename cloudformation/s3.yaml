@@ -969,40 +969,40 @@ Resources:
           #   Condition:
           #     StringNotLike:
           #       "s3:x-amz-server-side-encryption-aws-kms-key-id": !Sub arn:aws:kms:*:${AnotherTrustedValidAccountId1}:key/*
-          # - Sid: BlockMakingObjectsPublicViaAclSingleStatement # [ S3.C34.2 ]
-          #   Action: s3:PutObjectAcl
-          #   Effect: Deny
-          #   Resource: '*'
-          #   Principal: '*'
-          #   Condition:
-          #     StringEquals:
-          #       s3:x-amz-grant-full-control:
-          #         - http://acs.amazonaws.com/groups/global/AllUsers
-          #         - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
-          #       s3:x-amz-grant-read:
-          #         - http://acs.amazonaws.com/groups/global/AllUsers
-          #         - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
-          #       s3:x-amz-grant-read-acp:
-          #         - http://acs.amazonaws.com/groups/global/AllUsers
-          #         - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
-          #       s3:x-amz-grant-write-acp:
-          #         - http://acs.amazonaws.com/groups/global/AllUsers
-          #         - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
-          # - Sid: BlockPutbucketacl # [ S3.C55.2 ]
-          #   Action: s3:PutBucketAcl
-          #   Effect: Deny
-          #   Resource: '*'
-          #   Principal: '*'
-          # - Sid: DelegateAccessToS3LocalAccessPointByAccount # [ S3.C105.2 ]
-          #   Action: "*"
-          #   Effect: Allow
-          #   Resource: "*"
-          #   Principal:
-          #     AWS: "*"
-          #   Condition:
-          #     StringEquals:
-          #       s3:DataAccessPointAccount:
-          #         - !Ref AWS::AccountId
+          - Sid: BlockMakingObjectsPublicViaAclSingleStatement # [ S3.C34.2 ]
+            Action: s3:PutObjectAcl
+            Effect: Deny
+            Resource: '*'
+            Principal: '*'
+            Condition:
+              StringEquals:
+                s3:x-amz-grant-full-control:
+                  - http://acs.amazonaws.com/groups/global/AllUsers
+                  - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
+                s3:x-amz-grant-read:
+                  - http://acs.amazonaws.com/groups/global/AllUsers
+                  - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
+                s3:x-amz-grant-read-acp:
+                  - http://acs.amazonaws.com/groups/global/AllUsers
+                  - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
+                s3:x-amz-grant-write-acp:
+                  - http://acs.amazonaws.com/groups/global/AllUsers
+                  - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
+          - Sid: BlockPutbucketacl # [ S3.C55.2 ]
+            Action: s3:PutBucketAcl
+            Effect: Deny
+            Resource: '*'
+            Principal: '*'
+          - Sid: DelegateAccessToS3LocalAccessPointByAccount # [ S3.C105.2 ]
+            Action: "*"
+            Effect: Allow
+            Resource: "*"
+            Principal:
+              AWS: "*"
+            Condition:
+              StringEquals:
+                s3:DataAccessPointAccount:
+                  - !Ref AWS::AccountId
           - Sid: BlockUnauthorizedBuckets # [ S3.C24 ]
             Action: "*"
             Effect: Deny
