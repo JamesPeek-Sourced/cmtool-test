@@ -1,0 +1,13 @@
+entrypointDiscovery:
+- regex: (?P<type>[^/]+)/(?P<name>[^\.]+)
+  context:
+    policies: []
+#    - test.test
+- regex: cloudformation/(?P<name>[^\.]+).(yaml|json)
+  files: true
+  type: cloudformation
+  context:
+    policies: []
+    cfnguard:
+      rules:
+      - github.com/aws-cloudformation/aws-guard-rules-registry.git//rules/aws

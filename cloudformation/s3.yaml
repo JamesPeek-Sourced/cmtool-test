@@ -1,0 +1,1151 @@
+# This template deploys resources **COMPLIANT** with the following control identifiers:
+#   - S3.C1.1
+#   - S3.C1.2
+#   - S3.C5.1
+#   - S3.C10.1
+#   - S3.C16.1
+#   - S3.C16.2
+#   - S3.C19.1
+#   - S3.C21.1
+#   - S3.C24
+#   - S3.C28.1
+#   - S3.C28.2
+#   - S3.C32.1
+#   - S3.C32.2
+#   - S3.C34.1
+#   - S3.C34.2
+#   - S3.C45.1
+#   - S3.C54.1
+#   - S3.C55.1
+#   - S3.C67.1
+#   - S3.C67.2
+#   - S3.C69.1
+#   - S3.C71.1
+#   - S3.C74.1
+#   - S3.C78.1
+#   - S3.C88.1
+#   - S3.C87.1
+#   - S3.C92.1
+#   - S3.C95.1
+#   - S3.C99.1
+#   - S3.C99.2
+#   - S3.C99.3
+#   - S3.C105.1
+#   - S3.C105.2
+#   - S3.C106.1
+#   - S3.C108.1
+#   - S3.C111.1
+#   - S3.C111.2
+#   - S3.C117.1
+#   - S3.C118.1
+#   - S3.C126.1
+#   - S3.C150.1
+
+
+Parameters:
+
+  AnotherTrustedValidAccountId1:
+    Type: String
+    Description: A trusted valid account ID. !!CAUTION!! That account will obtain direct access to resources in this stack
+    AllowedPattern: "^\\d{12}$"
+    Default: '111111111111' # sourced-transient-7-nonproduction
+
+  AnotherTrustedValidAccountId2:
+    Type: String
+    Description: A trusted valid account ID. !!CAUTION!! That account will obtain direct access to resources in this stack
+    AllowedPattern: "^\\d{12}$"
+    Default: '222222222222' # sourced-transient-8-nonproduction
+
+  AwsOrganizationsId:
+    Type: String
+    AllowedPattern: "^o-[0-9a-z].*"
+    Default: o-aaaaaaaaaa # sourced engineering
+
+  GuardDutyDetectorEnabled:
+    Type: String
+    AllowedValues:
+      - true
+      - false
+    Default: true
+
+
+Conditions:
+
+  GuardDutyDetectorEnabled: !Equals
+    - !Ref GuardDutyDetectorEnabled
+    - true
+
+
+Resources:
+
+  # S3 Resources
+
+  S3Bucket1:
+    Type: AWS::S3::Bucket
+    DependsOn:
+      - LambdaPermission
+      - S3BucketForReplication
+      - SnsTopicPolicy
+      - SqsQueuePolicy
+    Properties:
+      BucketName: configrules-compliancecheck-yyz-11 # [ S3.C45.1 ]
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !GetAtt KmsKey1.Arn # [ S3.C67.1 ]
+      LifecycleConfiguration:
+        Rules:
+          - Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7 # [ S3.C78.1 ]
+      NotificationConfiguration: # [ S3.C95.1 ]
+        LambdaConfigurations:
+          - Function: !GetAtt LambdaFunction1.Arn
+            Event: s3:ReducedRedundancyLostObject
+        TopicConfigurations:
+          - Topic: !Ref SnsTopic1
+            Event: s3:ObjectTagging:Delete
+        QueueConfigurations:
+          - Queue: !GetAtt SqsQueue1.Arn
+            Event: s3:LifecycleExpiration:Delete
+      ReplicationConfiguration: # [ S3.C71.1, S3.C88.1 ]
+        Role: !GetAtt S3Bucket1IamRole.Arn # [ S3.C92.1 ]
+        Rules:
+          - DeleteMarkerReplication:
+              Status: Enabled
+            Destination:
+              Bucket: arn:aws:s3:::configrules-compliancecheck-repl-yyz
+              # Replication metrics are only available in >=v2 of the schema
+              # This is enabled through the use of the `Filter` property
+              Metrics: # [ S3.C117.1 ]
+                Status: Enabled
+            Filter:
+              Prefix: prefix_1/
+            Priority: 1
+            Status: Enabled
+          - DeleteMarkerReplication:
+              Status: Enabled
+            Destination:
+              Bucket: arn:aws:s3:::configrules-compliancecheck-repl-yyz
+              # Replication metrics are only available in >=v2 of the schema
+              # This is enabled through the use of the `Filter` property
+              Metrics: # [ S3.C117.1 ]
+                Status: Enabled
+            Filter:
+              Prefix: prefix_2/
+            Priority: 2
+            Status: Enabled
+      Tags:
+        - Key: ReplicationAuthorized # [ S3.C87.1 ]
+          Value: "true"
+        - Key: AnotherTestTag
+          Value: exists
+      VersioningConfiguration: # [ S3.C69.1 ]
+        Status: Enabled
+
+  S3Bucket1Policy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket1
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: BlockPutobjectIfKeyOutsideOfAccount1 # [ S3.C67.2 ]
+            Action: s3:PutObject
+            Effect: Deny
+            Resource: !Sub arn:aws:s3:::${S3Bucket1}/*
+            Principal: '*'
+            Condition:
+              StringNotLike:
+                "s3:x-amz-server-side-encryption-aws-kms-key-id": !Sub arn:aws:kms:*:${AWS::AccountId}:key/*
+          - Sid: BlockPutobjectIfKeyOutsideOfAccount2 # [ S3.C67.2 ]
+            Action: s3:Put*
+            Effect: Deny
+            Resource: !Sub arn:aws:s3:::${S3Bucket1}/*
+            Principal: '*'
+            Condition:
+              StringNotLike:
+                "s3:x-amz-server-side-encryption-aws-kms-key-id": !Sub arn:aws:kms:*:${AWS::AccountId}:key/*
+          - Sid: BlockPutobjectIfKeyOutsideOfAccount3 # [ S3.C67.2 ]
+            Action:
+              - s3:PutObject
+              - s3:PutObject*
+            Effect: Deny
+            Resource: !Sub arn:aws:s3:::${S3Bucket1}/*
+            Principal: '*'
+            Condition:
+              StringNotLike:
+                "s3:x-amz-server-side-encryption-aws-kms-key-id": !Sub arn:aws:kms:*:${AWS::AccountId}:key/*
+          - Sid: BlockPutobjectIfRemoteAccountNotAuthorizedSingle # [ S3.C32.1 ]
+            Action: s3:PutObject
+            Effect: Deny
+            Resource: !Sub arn:aws:s3:::${S3Bucket1}/*
+            Principal: '*'
+            Condition:
+              StringNotLike:
+                "s3:x-amz-server-side-encryption-aws-kms-key-id": !Sub arn:aws:kms:*:${AnotherTrustedValidAccountId1}:key/*
+          - Sid: BlockUnauthorizedTlsVersions # [ S3.C1.1 ]
+            Action: "*"
+            Effect: Deny
+            Resource: !Sub arn:aws:s3:::${S3Bucket1}/*
+            Principal: '*'
+            Condition:
+              NumericLessThan:
+                "s3:TlsVersion": 1.2
+          - Sid: AllowOtherAccountAccessWithOnePrincipals # [ S3.C28.2 ]
+            Action: s3:GetObject
+            Effect: Allow
+            Resource: !Sub arn:aws:s3:::${S3Bucket1}/*
+            Principal:
+              AWS:
+                - !Sub arn:aws:iam::${AnotherTrustedValidAccountId1}:root
+          - Sid: AllowOtherAccountAccessWithTwoPrincipals # [ S3.C28.2 ]
+            Action: s3:GetObject
+            Effect: Allow
+            Resource: !Sub arn:aws:s3:::${S3Bucket1}/*
+            Principal:
+              AWS:
+                - !Sub arn:aws:iam::${AnotherTrustedValidAccountId1}:root
+                - !Ref AnotherTrustedValidAccountId2
+          - Sid: BlockUnlessFromLocalVpceMultiple # [ S3.C99.1 ]
+            Effect: Deny
+            Principal: "*"
+            Action:
+              - s3:PutObject
+              - s3:GetObject*
+            Resource: !Sub arn:aws:s3:::${S3Bucket1}/*
+            Condition:
+              StringNotEquals:
+                aws:SourceVpce:
+                  - !Ref S3GatewayEndpoint
+                  - !Ref S3InterfaceEndpoint
+          - Sid: BlockMakingObjectsPublicViaAclSingleStatement # [ S3.C34.1 ]
+            Action: s3:PutObjectAcl
+            Effect: Deny
+            Resource: !Sub arn:aws:s3:::${S3Bucket1}/*
+            Principal: '*'
+            Condition:
+              StringEquals:
+                s3:x-amz-grant-full-control:
+                  - http://acs.amazonaws.com/groups/global/AllUsers
+                  - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
+                s3:x-amz-grant-read:
+                  - http://acs.amazonaws.com/groups/global/AllUsers
+                  - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
+                s3:x-amz-grant-read-acp:
+                  - http://acs.amazonaws.com/groups/global/AllUsers
+                  - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
+                s3:x-amz-grant-write-acp:
+                  - http://acs.amazonaws.com/groups/global/AllUsers
+                  - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
+          - Sid: BlockPutbucketacl # [ S3.C55.1 ]
+            Action: s3:PutBucketAcl
+            Effect: Deny
+            Resource: !Sub arn:aws:s3:::${S3Bucket1}
+            Principal: '*'
+          - Sid: BlockDataplaneAccessNotFromLocalAccesspointNotInVpc # [ S3.106.1, S3.C108.1 ]
+            # https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-points-policies.html
+            Action:
+              - s3:AbortMultipartUpload
+              - s3:BypassGovernanceRetention
+              - s3:DeleteObject
+              - s3:DeleteObjectTagging
+              - s3:DeleteObjectVersion
+              - s3:DeleteObjectVersionTagging
+              - s3:GetObject
+              - s3:GetObjectAcl
+              - s3:GetObjectLegalHold
+              - s3:GetObjectRetention
+              - s3:GetObjectTagging
+              - s3:GetObjectVersion
+              - s3:GetObjectVersionAcl
+              - s3:GetObjectVersionTagging
+              - s3:ListMultipartUploadParts
+              - s3:PutObject
+              - s3:PutObjectAcl
+              - s3:PutObjectLegalHold
+              - s3:PutObjectRetention
+              - s3:PutObjectTagging
+              - s3:PutObjectVersionAcl
+              - s3:PutObjectVersionTagging
+              - s3:RestoreObject
+            Effect: Deny
+            Resource: !Sub arn:aws:s3:::${S3Bucket1}/*
+            Principal: '*'
+            Condition:
+              StringNotEquals:
+                s3:DataAccessPointArn: !Sub arn:aws:s3:${AWS::Region}:${AWS::AccountId}:accesspoint/* # S3.C106.1
+                s3:AccessPointNetworkOrigin: VPC # S3.C108.1
+
+  S3Bucket1AccessPoint:
+    Type: AWS::S3::AccessPoint
+    Properties:
+      Bucket: !Ref S3Bucket1
+      Name: access-point-1
+      Policy:
+        Version: 2012-10-17
+        Statement:
+          - Action: s3:GetObject # [ S3.C28.1 ]
+            Effect: Allow
+            Resource: !Sub arn:${AWS::Partition}:s3:${AWS::Region}:${AWS::AccountId}:accesspoint/access-point-1/object/some-object
+            Principal:
+              AWS: !Ref AnotherTrustedValidAccountId1
+          - Action: s3:PutObject # [ S3.C28.1 ]
+            Effect: Deny
+            Resource: !Sub arn:${AWS::Partition}:s3:${AWS::Region}:${AWS::AccountId}:accesspoint/access-point-1/object/some-object
+            Principal:
+              AWS:
+                - !Sub arn:aws:iam::${AnotherTrustedValidAccountId1}:root
+                - !Ref AnotherTrustedValidAccountId2
+          - Sid: BlockUnlessFromLocalVpceSingle # [ S3.C99.1 ]
+            Action: s3:*
+            Effect: Deny
+            Resource: !Sub arn:${AWS::Partition}:s3:${AWS::Region}:${AWS::AccountId}:accesspoint/access-point-1/object/*
+            Principal:
+              AWS: "*"
+            Condition:
+              StringNotEquals:
+                aws:SourceVpce: !Ref S3GatewayEndpoint
+          - Sid: BlockUnlessFromLocalVpcSingle # [ S3.C99.3 ]
+            Action: s3:*
+            Effect: Deny
+            Resource: !Sub arn:${AWS::Partition}:s3:${AWS::Region}:${AWS::AccountId}:accesspoint/access-point-1/object/*
+            Principal:
+              AWS: "*"
+            Condition:
+              StringNotEquals:
+                aws:SourceVpc: !Ref Vpc1
+      PublicAccessBlockConfiguration: # [ S3.C54.1 ]
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VpcConfiguration: # [ S3.C111.1, S3.C111.2 ]
+        VpcId: !Ref Vpc1
+
+  S3Bucket1ObjectLambdaAccessPoint:
+    Type: AWS::S3ObjectLambda::AccessPoint
+    Properties:
+      ObjectLambdaConfiguration:
+        SupportingAccessPoint: !GetAtt S3Bucket1AccessPoint.Arn
+        TransformationConfigurations:
+          - Actions:
+            - GetObject
+            ContentTransformation:
+              AwsLambda:
+                FunctionArn: !GetAtt LambdaFunction1.Arn # [ S3.C126.1 ]
+
+
+  S3Bucket2:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: configrules-compliancecheck-yyz-2 # [ S3.C45.1 ]
+      LifecycleConfiguration:
+        Rules:
+          - Status: Disabled # INTENTIONALLY NON-COMPLIANT
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7 # [ S3.C78.1 ]
+      # ERROR on Rule 'S3.C74.1' - Replication configuration cannot be applied to an Object Lock enabled bucket
+      ObjectLockEnabled: true # [ S3.C74.1 ]
+      ObjectLockConfiguration:
+        ObjectLockEnabled: Enabled # [ S3.C74.1 ]
+        Rule:
+          DefaultRetention:
+            Days: "7"
+            Mode: COMPLIANCE
+
+  S3Bucket2Policy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket2
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DelegateAccessToS3LocalAccessPoint # [ S3.C105.1 ]
+            Action: "*"
+            Effect: Allow
+            Resource:
+              - !Sub arn:aws:s3:::${S3Bucket2}
+              - !Sub arn:aws:s3:::${S3Bucket2}/*
+            Principal:
+              AWS: "*"
+            Condition:
+              StringEquals:
+                s3:DataAccessPointArn: !Sub arn:aws:s3:${AWS::Region}:${AWS::AccountId}:accesspoint/*
+          - Sid: BlockDataplaneAccessNotFromLocalAccesspointNotInVpc # [ S3.C106.1 ]
+            Action:
+              - s3:AbortMultipartUpload
+              - s3:BypassGovernanceRetention
+              - s3:DeleteObject*
+              - s3:GetObject*
+              - s3:ListMultipartUploadParts
+              - s3:PutObject*
+              - s3:RestoreObject*
+            Effect: Deny
+            Resource: !Sub arn:aws:s3:::${S3Bucket2}/*
+            Principal: '*'
+            Condition:
+              StringNotEquals:
+                s3:DataAccessPointAccount: !Ref AWS::AccountId
+          - Sid: BlockPutobjectIfObjectlockUnauthorizedRetentionMaximum # [ S3.C76.1 ]
+            Action:
+              - s3:PutObject
+              - s3:PutObjectRetention
+            Effect: Deny
+            Resource: !Sub arn:aws:s3:::${S3Bucket2}/*
+            Principal: '*'
+            Condition:
+              NumericGreaterThan: # Set a maximum
+                s3:object-lock-remaining-retention-days: 7
+          - Sid: BlockPutobjectIfObjectlockUnauthorizedRetentionMaximum # [ S3.C76.1 ]
+            Action:
+              - s3:PutObject
+              - s3:PutObjectRetention
+            Effect: Deny
+            Resource: !Sub arn:aws:s3:::${S3Bucket2}/*
+            Principal: '*'
+            Condition:
+              NumericLessThan: # Set a maximum
+                s3:object-lock-remaining-retention-days: 7
+          - Sid: BlockPutobjectIfObjectlockUnauthorizedMode # [ S3.C76.1 ]
+            Action:
+              - s3:PutObject
+              - s3:PutObjectRetention
+            Effect: Deny
+            Resource: !Sub arn:aws:s3:::${S3Bucket2}/*
+            Principal: '*'
+            Condition:
+              StringNotEquals:
+                s3:object-lock-mode: COMPLIANCE
+
+
+  S3Bucket3:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: configrules-compliancecheck-yyz-4 # [ S3.C45.1 ]
+
+  S3Bucket3Policy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket3
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: BlockIfNotFromAuthorizedVpce # [ S3.C16.1 ]
+            Principal: "*"
+            Action:
+              - s3:GetObject*
+              - s3:PutObject*
+            Effect: Deny
+            Resource:
+              - arn:aws:s3:::configrules-compliancecheck-yyz-4
+              - arn:aws:s3:::configrules-compliancecheck-yyz-4/*
+            Condition:
+              StringNotEquals:
+                aws:SourceVpce: !Ref S3InterfaceEndpoint
+          - Sid: BlockIfNotFromAuthorizedVpc # [ S3.C16.2 ]
+            Principal: "*"
+            Action:
+              - s3:GetObject*
+              - s3:PutObject*
+            Effect: Deny
+            Resource:
+              - arn:aws:s3:::configrules-compliancecheck-yyz-4
+              - arn:aws:s3:::configrules-compliancecheck-yyz-4/*
+            Condition:
+              StringNotEquals:
+                aws:SourceVpc: !Ref Vpc1
+          - Sid: BlockPutobjectIfRemoteAccountNotAuthorizedMultiple # [ S3.C32.1 ]
+            Action: s3:PutObject
+            Effect: Deny
+            Resource: !Sub arn:aws:s3:::${S3Bucket3}/*
+            Principal: '*'
+            Condition:
+              StringNotLike:
+                "s3:x-amz-server-side-encryption-aws-kms-key-id":
+                  - !Sub arn:aws:kms:*:${AnotherTrustedValidAccountId1}:key/*
+                  - !Sub arn:aws:kms:*:${AnotherTrustedValidAccountId2}:key/*
+          - Sid: BlockUnlessSsecEncryptedAllPrefixes
+            Effect: Deny
+            Principal: "*"
+            Action: s3:PutObject
+            Resource: arn:aws:s3:::configrules-compliancecheck-yyz-4/*
+            Condition:
+              'Null':
+                s3:x-amz-server-side-encryption-customer-algorithm: 'false'
+          - Sid: BlockUnlessSsecEncryptedSinglePrefix
+            Effect: Deny
+            Principal: "*"
+            Action: s3:PutObject
+            Resource: arn:aws:s3:::configrules-compliancecheck-yyz-4/some-prefix/*
+            Condition:
+              'Null':
+                s3:x-amz-server-side-encryption-customer-algorithm: 'false'
+          - Sid: BlockUnlessSsecEncryptedTwoPrefixes
+            Effect: Deny
+            Principal: "*"
+            Action: s3:PutObject
+            Resource:
+              - arn:aws:s3:::configrules-compliancecheck-yyz-4/some-prefix/*
+              - arn:aws:s3:::configrules-compliancecheck-yyz-4/another-prefix/*
+            Condition:
+              'Null':
+                s3:x-amz-server-side-encryption-customer-algorithm: 'false'
+          - Sid: BlockUnlessFromLocalVpceSingle # [ S3.C99.1 ]
+            Effect: Deny
+            Principal: "*"
+            Action:
+              - s3:*Object
+            Resource: !Sub arn:aws:s3:::${S3Bucket3}/*
+            Condition:
+              StringNotEquals:
+                aws:SourceVpce: !Ref S3GatewayEndpoint
+          # Single condition; single key; multiple values
+          - Sid: BlockMakingObjectsPublicViaAcl1 # [ S3.C34.1 ]
+            Action: s3:PutObjectAcl
+            Effect: Deny
+            Resource: !Sub arn:aws:s3:::${S3Bucket3}/*
+            Principal: '*'
+            Condition:
+              StringEquals:
+                s3:x-amz-grant-full-control:
+                  - http://acs.amazonaws.com/groups/global/AllUsers
+                  - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
+          # Single condition; multiple keys; multiple values
+          - Sid: BlockMakingObjectsPublicViaAcl2 # [ S3.C34.1 ]
+            Action: s3:PutObjectAcl
+            Effect: Deny
+            Resource: !Sub arn:aws:s3:::${S3Bucket3}/*
+            Principal: '*'
+            Condition:
+              StringEquals:
+                s3:x-amz-grant-read:
+                  - http://acs.amazonaws.com/groups/global/AllUsers
+                  - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
+                s3:x-amz-grant-read-acp:
+                  - http://acs.amazonaws.com/groups/global/AllUsers
+                  - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
+          # Single condition; single key; single value
+          - Sid: BlockMakingObjectsPublicViaAcl3 # [ S3.C34.1 ]
+            Action: s3:PutObjectAcl
+            Effect: Deny
+            Resource: !Sub arn:aws:s3:::${S3Bucket3}/*
+            Principal: '*'
+            Condition:
+              StringEquals:
+                s3:x-amz-grant-write-acp:
+                  - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
+          # Single condition; single key; single value
+          - Sid: BlockMakingObjectsPublicViaAcl3 # [ S3.C34.1 ]
+            Action: s3:PutObjectAcl
+            Effect: Deny
+            Resource: !Sub arn:aws:s3:::${S3Bucket3}/*
+            Principal: '*'
+            Condition:
+              StringEquals:
+                s3:x-amz-grant-write-acp: http://acs.amazonaws.com/groups/global/AllUsers
+          - Sid: BlockDataplaneAccessNotFromLocalAccesspointNotInVpc # [ S3.C106.1, S3.C108.1 ]
+            Action:
+              - s3:AbortMultipartUpload
+              - s3:BypassGovernanceRetention
+              - s3:DeleteObject*
+              - s3:GetObject*
+              - s3:ListMultipartUploadParts
+              - s3:PutObject*
+              - s3:RestoreObject*
+            Effect: Deny
+            Resource: !Sub arn:aws:s3:::${S3Bucket3}/*
+            Principal: '*'
+            Condition:
+              StringNotEquals:
+                s3:DataAccessPointArn: !GetAtt S3Bucket3AccessPoint.Arn # S3.C106.1
+                s3:AccessPointNetworkOrigin: VPC # S3.C108.1
+          - Sid: DelegateAccessToS3LocalAccessPointByAccount # [ S3.C105.1 ]
+            Action: "*"
+            Effect: Allow
+            Resource:
+              - !Sub arn:aws:s3:::${S3Bucket3}
+              - !Sub arn:aws:s3:::${S3Bucket3}/*
+            Principal:
+              AWS: "*"
+            Condition:
+              StringEquals:
+                s3:DataAccessPointAccount:
+                  - !Ref AWS::AccountId
+
+  S3Bucket3AccessPoint:
+    Type: AWS::S3::AccessPoint
+    Properties:
+      Bucket: !Ref S3Bucket3
+      Name: access-point-bucket3
+      Policy:
+        Version: 2012-10-17
+        Statement:
+          - Sid: BlockUnlessFromLocalVpceMultiple # [ S3.C99.1 ]
+            Action:
+              - s3:PutObject
+              - s3:GetObject*
+            Effect: Deny
+            Resource: !Sub arn:${AWS::Partition}:s3:${AWS::Region}:${AWS::AccountId}:accesspoint/access-point-bucket3/object/*
+            Principal:
+              AWS: "*"
+            Condition:
+              StringNotEquals:
+                aws:SourceVpce:
+                  - !Ref S3GatewayEndpoint
+                  - !Ref S3InterfaceEndpoint
+          - Sid: BlockUnlessFromVpcMultiple # [ S3.C99.3 ]
+            Action: s3:*
+            Effect: Deny
+            Resource: !Sub arn:${AWS::Partition}:s3:${AWS::Region}:${AWS::AccountId}:accesspoint/access-point-bucket3/object/*
+            Principal:
+              AWS: "*"
+            Condition:
+              StringNotEquals:
+                aws:SourceVpc:
+                  - !Ref Vpc1
+                  - !Ref Vpc2
+
+      PublicAccessBlockConfiguration: # [ S3.C54.1 ]
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  S3BucketForReplication:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: configrules-compliancecheck-repl-yyz
+      VersioningConfiguration:
+        Status: Enabled
+
+  S3Bucket1IamRole: # [ S3.C92.1 ]
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - s3.amazonaws.com
+            Action:
+              - sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
+  # Bucket used for testing principals, ip addresses and vpc ids
+  S3Bucket4:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: configrules-compliancecheck-yyz-5 # [ S3.C45.1 ]
+
+  # S3Bucket4Policy:
+  #   Type: AWS::S3::BucketPolicy
+  #   Properties:
+  #     Bucket: !Ref S3Bucket4
+  #     PolicyDocument:
+  #       Version: 2012-10-17
+  #       Statement:
+  #         - Sid: AllowIamPrincipals # [ S3.C150.1 ]
+  #           Action:
+  #             - s3:GetObject
+  #           Effect: Allow
+  #           Resource: !Sub arn:aws:s3:::${S3Bucket4}/*
+  #           Principal:
+  #             AWS:
+  #               - !GetAtt TestIamRole1.Arn
+  #               - !GetAtt TestIamRole2.Arn
+  #               - !GetAtt TestIamUser1.Arn
+  #               - !Ref AWS::AccountId
+  #         - Sid: AllowIPAddresses # [ S3.C150.1 ]
+  #           Action:
+  #             - s3:GetObject
+  #           Effect: Allow
+  #           Resource: !Sub arn:aws:s3:::${S3Bucket4}/*
+  #           Principal: "*"
+  #           Condition:
+  #             IpAddress:
+  #               aws::SourceIp:
+  #                 - 255.255.255.255/32
+  #                 - 0.0.0.0/32
+  #         - Sid: AllowServicePrincipals # [ S3.C150.1 ]
+  #           Action:
+  #             - s3:GetObject
+  #           Effect: Allow
+  #           Resource: !Sub arn:aws:s3:::${S3Bucket4}/*
+  #           Principal:
+  #             Service: cloudtrail.amazonaws.com
+
+  S3BucketInventoryTarget:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: configrules-compliancecheck-inventory # [ S3.C45.1 ]
+
+  S3BucketInventorySource:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: configrules-compliancecheck-inventory-source # [ S3.C45.1 ]
+      InventoryConfigurations:
+        - Id: some-inventory-configuration
+          Destination: 
+            BucketAccountId: !Ref AWS::AccountId
+            BucketArn: !Sub arn:aws:s3:::${S3BucketInventoryTarget}
+            Format: CSV 
+          Enabled: true
+          IncludedObjectVersions: All
+          OptionalFields: 
+            - EncryptionStatus
+          ScheduleFrequency: Daily
+
+  TestIamRole1:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+      Policies:
+        - PolicyName: deny-all
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Deny
+                Action: '*'
+                Resource: '*'
+
+  TestIamRole2:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+      Policies:
+        - PolicyName: deny-all
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Deny
+                Action: '*'
+                Resource: '*'
+
+  TestIamUser1:
+    Type: AWS::IAM::User
+    Properties:
+      Policies:
+        - PolicyName: deny-all
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Deny
+                Action: '*'
+                Resource: '*'
+
+
+
+  # Lambda resources
+
+  LambdaFunction1: # [ S3.C95.1 ]
+    Type: AWS::Lambda::Function
+    Properties:
+      Role: !GetAtt LambdaFunctionIamRole.Arn
+      Runtime: python3.8
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          exit 1
+
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt LambdaFunction1.Arn
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: arn:aws:s3:::configrules-compliancecheck-yyz-11
+
+  LambdaFunctionIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+            # Condition: TODO: tighten using `sts:RoleSessionName`
+      Policies:
+        - PolicyName: s3-lambda-object-accesspoint
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: s3-object-lambda:WriteGetObjectResponse
+                Resource: '*'
+        - PolicyName: s3-lambda-object-accesspoint-bucket-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - arn:aws:s3:::configrules-compliancecheck-yyz-11
+                  - arn:aws:s3:::configrules-compliancecheck-yyz-11/*
+
+  # SNS resources
+
+  SnsTopic1: # [ S3.C95.1 ]
+    Type: AWS::SNS::Topic
+
+  SnsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: s3.amazonaws.com
+          Action: sns:Publish
+          Resource: !Ref SnsTopic1
+          Condition:
+            ArnLike:
+              aws:SourceArn: arn:aws:s3:::configrules-compliancecheck-yyz-11
+            StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+      Topics:
+      - !Ref SnsTopic1
+
+
+  # SQS resources
+
+  SqsQueue1: # [ S3.C95.1 ]
+    Type: AWS::SQS::Queue
+
+  SqsQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref SqsQueue1
+      PolicyDocument:
+        Statement:
+          - Action: sqs:SendMessage
+            Effect: Allow
+            Resource: "*"
+            Principal:
+              Service: s3.amazonaws.com
+            Condition:
+              ArnLike:
+                aws:SourceArn: arn:aws:s3:::configrules-compliancecheck-yyz-11
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
+
+  # KMS Resources
+
+  KmsKey1: # [ S3.C67.1 ]
+    Type: AWS::KMS::Key
+    Properties:
+      EnableKeyRotation: false
+      KeyPolicy:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: "*"
+
+
+  # GuardDuty Resources
+
+  GurdDutyDetector:
+    Condition: GuardDutyDetectorEnabled
+    Type: AWS::GuardDuty::Detector
+    Properties:
+      DataSources:
+        S3Logs:
+          Enable: true # [ S3.C10.1 ]
+      Enable: true
+      FindingPublishingFrequency: SIX_HOURS
+
+
+  # VPC Resources
+
+  Vpc1:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/26
+      EnableDnsSupport: false
+      EnableDnsHostnames: false
+
+  Vpc1Subnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc1
+      CidrBlock: 10.0.0.0/28
+      AvailabilityZone: !Select
+        - 0
+        - Fn::GetAZs: !Ref AWS::Region
+
+  Vpc1Subnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc1
+      CidrBlock: 10.0.0.16/28
+      AvailabilityZone: !Select
+        - 1
+        - Fn::GetAZs: !Ref AWS::Region
+
+  Vpc2:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/26
+      EnableDnsSupport: false
+      EnableDnsHostnames: false
+
+  S3InterfaceEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcEndpointType: Interface
+      SecurityGroupIds:
+        - !Ref S3EndpointsSecurityGroup
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      SubnetIds:
+        - !Ref Vpc1Subnet1
+        - !Ref Vpc1Subnet2
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          # - Sid: BlockHttpOnly # [ S3.C5.1 ]
+          #   Action: '*'
+          #   Effect: Deny
+          #   Resource: !Sub arn:aws:s3:::${S3Bucket1}/*
+          #   Principal: '*'
+          #   Condition:
+          #     Bool:
+          #       "aws:SecureTransport": "false"
+          # - Sid: BlockUnauthorizedOrganization # [ S3.C19.1 ]
+          #   Action: '*'
+          #   Effect: Deny
+          #   Resource: '*'
+          #   Principal: '*'
+          #   Condition:
+          #     StringNotEquals:
+          #       "aws:PrincipalOrgId": !Ref AwsOrganizationsId
+          # - Sid: BlockUnauthorizedTlsVersions # [ S3.C2.2 ]
+          #   Action: "*"
+          #   Effect: Deny
+          #   Resource: "*"
+          #   Principal: '*'
+          #   Condition:
+          #     NumericLessThan:
+          #       "s3:TlsVersion": 1.2
+          # - Sid: BlockPutobjectIfRemoteAccountNotAuthorizedSingle # [ S3.C32.2 ]
+          #   Action: s3:PutObject
+          #   Effect: Deny
+          #   Resource: '*'
+          #   Principal: '*'
+          #   Condition:
+          #     StringNotLike:
+          #       "s3:x-amz-server-side-encryption-aws-kms-key-id": !Sub arn:aws:kms:*:${AnotherTrustedValidAccountId1}:key/*
+          # - Sid: BlockMakingObjectsPublicViaAclSingleStatement # [ S3.C34.2 ]
+          #   Action: s3:PutObjectAcl
+          #   Effect: Deny
+          #   Resource: '*'
+          #   Principal: '*'
+          #   Condition:
+          #     StringEquals:
+          #       s3:x-amz-grant-full-control:
+          #         - http://acs.amazonaws.com/groups/global/AllUsers
+          #         - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
+          #       s3:x-amz-grant-read:
+          #         - http://acs.amazonaws.com/groups/global/AllUsers
+          #         - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
+          #       s3:x-amz-grant-read-acp:
+          #         - http://acs.amazonaws.com/groups/global/AllUsers
+          #         - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
+          #       s3:x-amz-grant-write-acp:
+          #         - http://acs.amazonaws.com/groups/global/AllUsers
+          #         - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
+          # - Sid: BlockPutbucketacl # [ S3.C55.2 ]
+          #   Action: s3:PutBucketAcl
+          #   Effect: Deny
+          #   Resource: '*'
+          #   Principal: '*'
+          # - Sid: DelegateAccessToS3LocalAccessPointByAccount # [ S3.C105.2 ]
+          #   Action: "*"
+          #   Effect: Allow
+          #   Resource: "*"
+          #   Principal:
+          #     AWS: "*"
+          #   Condition:
+          #     StringEquals:
+          #       s3:DataAccessPointAccount:
+          #         - !Ref AWS::AccountId
+          - Sid: BlockUnauthorizedBuckets # [ S3.C24 ]
+            Action: "*"
+            Effect: Deny
+            NotResource:
+              - !GetAtt S3Bucket1.Arn
+              - !GetAtt S3Bucket2.Arn
+            Principal:
+              AWS: "*"
+          - Sid: BlockUnauthorizedS3Accounts # [ S3.C24 ]
+            Action: "*"
+            Effect: Deny
+            Resource: "*"
+            Principal:
+              AWS: "*"
+            Condition:
+              StringNotEquals:
+                "s3:ResourceAccount": 
+                  - !Ref AWS::AccountId
+                  - !Ref AnotherTrustedValidAccountId1
+      VpcId: !Ref Vpc1
+
+  S3GatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcEndpointType: Gateway
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: BlockHttpOnly # [ S3.C5.1 ]
+            Action: '*'
+            Effect: Deny
+            Resource: !Sub arn:aws:s3:::${S3Bucket1}/*
+            Principal: '*'
+            Condition:
+              Bool:
+                "aws:SecureTransport": "false"
+          - Sid: BlockUnauthorizedOrganization # [ S3.C19.1 ]
+            Action: '*'
+            Effect: Deny
+            Resource: '*'
+            Principal: '*'
+            Condition:
+              StringNotEquals:
+                "aws:PrincipalOrgId": !Ref AwsOrganizationsId
+          - Sid: BlockUnauthorizedTlsVersionsMultipleElements # [ S3.C2.2 ]
+            Action:
+              - "*"
+              - "s3:*"
+              - "s3:Get*"
+            Effect: Deny
+            Resource:
+              - !Sub arn:aws:s3:::/*
+              - !Sub arn:aws:s3:::/some-prefix/*
+            Principal:
+              AWS:
+                - !Ref AWS::AccountId
+                - "*"
+            Condition:
+              NumericLessThan:
+                "s3:TlsVersion": 1.2
+          - Sid: BlockPutobjectIfRemoteAccountNotAuthorizedMultiple # [ S3.C32.2 ]
+            Action: s3:PutObject
+            Effect: Deny
+            Resource: '*'
+            Principal: '*'
+            Condition:
+              StringNotLike:
+                "s3:x-amz-server-side-encryption-aws-kms-key-id":
+                  - !Sub arn:aws:kms:*:${AnotherTrustedValidAccountId1}:key/*
+                  - !Sub arn:aws:kms:*:${AnotherTrustedValidAccountId2}:key/*
+          # Single condition; single key; multiple values
+          - Sid: BlockMakingObjectsPublicViaAcl1 # [ S3.C34.2 ]
+            Action: s3:PutObjectAcl
+            Effect: Deny
+            Resource: '*'
+            Principal: '*'
+            Condition:
+              StringEquals:
+                s3:x-amz-grant-full-control:
+                  - http://acs.amazonaws.com/groups/global/AllUsers
+                  - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
+          # Single condition; multiple keys; multiple values
+          - Sid: BlockMakingObjectsPublicViaAcl2 # [ S3.C34.2 ]
+            Action: s3:PutObjectAcl
+            Effect: Deny
+            Resource: '*'
+            Principal: '*'
+            Condition:
+              StringEquals:
+                s3:x-amz-grant-read:
+                  - http://acs.amazonaws.com/groups/global/AllUsers
+                  - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
+                s3:x-amz-grant-read-acp:
+                  - http://acs.amazonaws.com/groups/global/AllUsers
+                  - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
+          # Single condition; single key; single value
+          - Sid: BlockMakingObjectsPublicViaAcl3 # [ S3.C34.2 ]
+            Action: s3:PutObjectAcl
+            Effect: Deny
+            Resource: arn:aws:s3:::*/*
+            Principal: '*'
+            Condition:
+              StringEquals:
+                s3:x-amz-grant-write-acp:
+                  - http://acs.amazonaws.com/groups/global/AuthenticatedUsers
+          # Single condition; single key; single value
+          - Sid: BlockMakingObjectsPublicViaAcl3 # [ S3.C34.2 ]
+            Action: s3:PutObjectAcl
+            Effect: Deny
+            Resource: arn:aws:s3:::*
+            Principal: '*'
+            Condition:
+              StringEquals:
+                s3:x-amz-grant-write-acp: http://acs.amazonaws.com/groups/global/AllUsers
+          - Sid: BlockPutbucketacl # [ S3.C55.2 ]
+            Action: s3:PutBucketAcl
+            Effect: Deny
+            Resource: '*'
+            Principal: '*'
+          - Sid: DelegateAccessToS3LocalAccessPoint # [ S3.C105.2 ]
+            Action: "*"
+            Effect: Allow
+            Resource: "*"
+            Principal:
+              AWS: "*"
+            Condition:
+              StringEquals:
+                s3:DataAccessPointArn: !Sub arn:aws:s3:${AWS::Region}:${AWS::AccountId}:accesspoint/*
+      VpcId: !Ref Vpc1
+
+  S3EndpointsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: security-group
+      VpcId: !Ref Vpc1
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !GetAtt Vpc1.CidrBlock
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 0
+          CidrIp: 0.0.0.0/32
