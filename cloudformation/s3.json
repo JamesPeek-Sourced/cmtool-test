@@ -1,0 +1,1450 @@
+{
+    "Parameters": {
+       "AnotherTrustedValidAccountId1": {
+          "Type": "String",
+          "Description": "A trusted valid account ID. !!CAUTION!! That account will obtain direct access to resources in this stack",
+          "AllowedPattern": "^\\d{12}$",
+          "Default": "111111111111"
+       },
+       "AnotherTrustedValidAccountId2": {
+          "Type": "String",
+          "Description": "A trusted valid account ID. !!CAUTION!! That account will obtain direct access to resources in this stack",
+          "AllowedPattern": "^\\d{12}$",
+          "Default": "222222222222"
+       },
+       "AwsOrganizationsId": {
+          "Type": "String",
+          "AllowedPattern": "^o-[0-9a-z].*",
+          "Default": "o-aaaaaaaaaa"
+       },
+       "GuardDutyDetectorEnabled": {
+          "Type": "String",
+          "AllowedValues": [
+             true,
+             false
+          ],
+          "Default": true
+       }
+    },
+    "Conditions": {
+       "GuardDutyDetectorEnabled": null
+    },
+    "Resources": {
+       "S3Bucket1": {
+          "Type": "AWS::S3::Bucket",
+          "DependsOn": [
+             "LambdaPermission",
+             "S3BucketForReplication",
+             "SnsTopicPolicy",
+             "SqsQueuePolicy"
+          ],
+          "Properties": {
+             "BucketName": "configrules-compliancecheck-yyz-11",
+             "BucketEncryption": {
+                "ServerSideEncryptionConfiguration": [
+                   {
+                      "ServerSideEncryptionByDefault": {
+                         "SSEAlgorithm": "aws:kms",
+                         "KMSMasterKeyID": null
+                      }
+                   }
+                ]
+             },
+             "LifecycleConfiguration": {
+                "Rules": [
+                   {
+                      "Status": "Enabled",
+                      "AbortIncompleteMultipartUpload": {
+                         "DaysAfterInitiation": 7
+                      }
+                   }
+                ]
+             },
+             "NotificationConfiguration": {
+                "LambdaConfigurations": [
+                   {
+                      "Function": null,
+                      "Event": "s3:ReducedRedundancyLostObject"
+                   }
+                ],
+                "TopicConfigurations": [
+                   {
+                      "Topic": null,
+                      "Event": "s3:ObjectTagging:Delete"
+                   }
+                ],
+                "QueueConfigurations": [
+                   {
+                      "Queue": null,
+                      "Event": "s3:LifecycleExpiration:Delete"
+                   }
+                ]
+             },
+             "ReplicationConfiguration": {
+                "Role": null,
+                "Rules": [
+                   {
+                      "DeleteMarkerReplication": {
+                         "Status": "Enabled"
+                      },
+                      "Destination": {
+                         "Bucket": "arn:aws:s3:::configrules-compliancecheck-repl-yyz",
+                         "Metrics": {
+                            "Status": "Enabled"
+                         }
+                      },
+                      "Filter": {
+                         "Prefix": "prefix_1/"
+                      },
+                      "Priority": 1,
+                      "Status": "Enabled"
+                   },
+                   {
+                      "DeleteMarkerReplication": {
+                         "Status": "Enabled"
+                      },
+                      "Destination": {
+                         "Bucket": "arn:aws:s3:::configrules-compliancecheck-repl-yyz",
+                         "Metrics": {
+                            "Status": "Enabled"
+                         }
+                      },
+                      "Filter": {
+                         "Prefix": "prefix_2/"
+                      },
+                      "Priority": 2,
+                      "Status": "Enabled"
+                   }
+                ]
+             },
+             "Tags": [
+                {
+                   "Key": "ReplicationAuthorized",
+                   "Value": "true"
+                },
+                {
+                   "Key": "AnotherTestTag",
+                   "Value": "exists"
+                }
+             ],
+             "VersioningConfiguration": {
+                "Status": "Enabled"
+             }
+          }
+       },
+       "S3Bucket1Policy": {
+          "Type": "AWS::S3::BucketPolicy",
+          "Properties": {
+             "Bucket": null,
+             "PolicyDocument": {
+                "Version": "2012-10-17T00:00:00.000Z",
+                "Statement": [
+                   {
+                      "Sid": "BlockPutobjectIfKeyOutsideOfAccount1",
+                      "Action": "s3:PutObject",
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": "*",
+                      "Condition": {
+                         "StringNotLike": {
+                            "s3:x-amz-server-side-encryption-aws-kms-key-id": null
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockPutobjectIfKeyOutsideOfAccount2",
+                      "Action": "s3:Put*",
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": "*",
+                      "Condition": {
+                         "StringNotLike": {
+                            "s3:x-amz-server-side-encryption-aws-kms-key-id": null
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockPutobjectIfKeyOutsideOfAccount3",
+                      "Action": [
+                         "s3:PutObject",
+                         "s3:PutObject*"
+                      ],
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": "*",
+                      "Condition": {
+                         "StringNotLike": {
+                            "s3:x-amz-server-side-encryption-aws-kms-key-id": null
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockPutobjectIfRemoteAccountNotAuthorizedSingle",
+                      "Action": "s3:PutObject",
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": "*",
+                      "Condition": {
+                         "StringNotLike": {
+                            "s3:x-amz-server-side-encryption-aws-kms-key-id": null
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockUnauthorizedTlsVersions",
+                      "Action": "*",
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": "*",
+                      "Condition": {
+                         "NumericLessThan": {
+                            "s3:TlsVersion": 1.2
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "AllowOtherAccountAccessWithOnePrincipals",
+                      "Action": "s3:GetObject",
+                      "Effect": "Allow",
+                      "Resource": null,
+                      "Principal": {
+                         "AWS": [
+                            null
+                         ]
+                      }
+                   },
+                   {
+                      "Sid": "AllowOtherAccountAccessWithTwoPrincipals",
+                      "Action": "s3:GetObject",
+                      "Effect": "Allow",
+                      "Resource": null,
+                      "Principal": {
+                         "AWS": [
+                            null,
+                            null
+                         ]
+                      }
+                   },
+                   {
+                      "Sid": "BlockUnlessFromLocalVpceMultiple",
+                      "Effect": "Deny",
+                      "Principal": "*",
+                      "Action": [
+                         "s3:PutObject",
+                         "s3:GetObject*"
+                      ],
+                      "Resource": null,
+                      "Condition": {
+                         "StringNotEquals": {
+                            "aws:SourceVpce": [
+                               null,
+                               null
+                            ]
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockMakingObjectsPublicViaAclSingleStatement",
+                      "Action": "s3:PutObjectAcl",
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": "*",
+                      "Condition": {
+                         "StringEquals": {
+                            "s3:x-amz-grant-full-control": [
+                               "http://acs.amazonaws.com/groups/global/AllUsers",
+                               "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+                            ],
+                            "s3:x-amz-grant-read": [
+                               "http://acs.amazonaws.com/groups/global/AllUsers",
+                               "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+                            ],
+                            "s3:x-amz-grant-read-acp": [
+                               "http://acs.amazonaws.com/groups/global/AllUsers",
+                               "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+                            ],
+                            "s3:x-amz-grant-write-acp": [
+                               "http://acs.amazonaws.com/groups/global/AllUsers",
+                               "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+                            ]
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockPutbucketacl",
+                      "Action": "s3:PutBucketAcl",
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": "*"
+                   },
+                   {
+                      "Sid": "BlockDataplaneAccessNotFromLocalAccesspointNotInVpc",
+                      "Action": [
+                         "s3:AbortMultipartUpload",
+                         "s3:BypassGovernanceRetention",
+                         "s3:DeleteObject",
+                         "s3:DeleteObjectTagging",
+                         "s3:DeleteObjectVersion",
+                         "s3:DeleteObjectVersionTagging",
+                         "s3:GetObject",
+                         "s3:GetObjectAcl",
+                         "s3:GetObjectLegalHold",
+                         "s3:GetObjectRetention",
+                         "s3:GetObjectTagging",
+                         "s3:GetObjectVersion",
+                         "s3:GetObjectVersionAcl",
+                         "s3:GetObjectVersionTagging",
+                         "s3:ListMultipartUploadParts",
+                         "s3:PutObject",
+                         "s3:PutObjectAcl",
+                         "s3:PutObjectLegalHold",
+                         "s3:PutObjectRetention",
+                         "s3:PutObjectTagging",
+                         "s3:PutObjectVersionAcl",
+                         "s3:PutObjectVersionTagging",
+                         "s3:RestoreObject"
+                      ],
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": "*",
+                      "Condition": {
+                         "StringNotEquals": {
+                            "s3:DataAccessPointArn": null,
+                            "s3:AccessPointNetworkOrigin": "VPC"
+                         }
+                      }
+                   }
+                ]
+             }
+          }
+       },
+       "S3Bucket1AccessPoint": {
+          "Type": "AWS::S3::AccessPoint",
+          "Properties": {
+             "Bucket": null,
+             "Name": "access-point-1",
+             "Policy": {
+                "Version": "2012-10-17T00:00:00.000Z",
+                "Statement": [
+                   {
+                      "Action": "s3:GetObject",
+                      "Effect": "Allow",
+                      "Resource": null,
+                      "Principal": {
+                         "AWS": null
+                      }
+                   },
+                   {
+                      "Action": "s3:PutObject",
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": {
+                         "AWS": [
+                            null,
+                            null
+                         ]
+                      }
+                   },
+                   {
+                      "Sid": "BlockUnlessFromLocalVpceSingle",
+                      "Action": "s3:*",
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": {
+                         "AWS": "*"
+                      },
+                      "Condition": {
+                         "StringNotEquals": {
+                            "aws:SourceVpce": null
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockUnlessFromLocalVpcSingle",
+                      "Action": "s3:*",
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": {
+                         "AWS": "*"
+                      },
+                      "Condition": {
+                         "StringNotEquals": {
+                            "aws:SourceVpc": null
+                         }
+                      }
+                   }
+                ]
+             },
+             "PublicAccessBlockConfiguration": {
+                "BlockPublicAcls": true,
+                "BlockPublicPolicy": true,
+                "IgnorePublicAcls": true,
+                "RestrictPublicBuckets": true
+             },
+             "VpcConfiguration": {
+                "VpcId": null
+             }
+          }
+       },
+       "S3Bucket1ObjectLambdaAccessPoint": {
+          "Type": "AWS::S3ObjectLambda::AccessPoint",
+          "Properties": {
+             "ObjectLambdaConfiguration": {
+                "SupportingAccessPoint": null,
+                "TransformationConfigurations": [
+                   {
+                      "Actions": [
+                         "GetObject"
+                      ],
+                      "ContentTransformation": {
+                         "AwsLambda": {
+                            "FunctionArn": null
+                         }
+                      }
+                   }
+                ]
+             }
+          }
+       },
+       "S3Bucket2": {
+          "Type": "AWS::S3::Bucket",
+          "Properties": {
+             "BucketName": "configrules-compliancecheck-yyz-2",
+             "LifecycleConfiguration": {
+                "Rules": [
+                   {
+                      "Status": "Disabled",
+                      "AbortIncompleteMultipartUpload": {
+                         "DaysAfterInitiation": 7
+                      }
+                   }
+                ]
+             },
+             "ObjectLockEnabled": true,
+             "ObjectLockConfiguration": {
+                "ObjectLockEnabled": "Enabled",
+                "Rule": {
+                   "DefaultRetention": {
+                      "Days": "7",
+                      "Mode": "COMPLIANCE"
+                   }
+                }
+             }
+          }
+       },
+       "S3Bucket2Policy": {
+          "Type": "AWS::S3::BucketPolicy",
+          "Properties": {
+             "Bucket": null,
+             "PolicyDocument": {
+                "Version": "2012-10-17T00:00:00.000Z",
+                "Statement": [
+                   {
+                      "Sid": "DelegateAccessToS3LocalAccessPoint",
+                      "Action": "*",
+                      "Effect": "Allow",
+                      "Resource": [
+                         null,
+                         null
+                      ],
+                      "Principal": {
+                         "AWS": "*"
+                      },
+                      "Condition": {
+                         "StringEquals": {
+                            "s3:DataAccessPointArn": null
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockDataplaneAccessNotFromLocalAccesspointNotInVpc",
+                      "Action": [
+                         "s3:AbortMultipartUpload",
+                         "s3:BypassGovernanceRetention",
+                         "s3:DeleteObject*",
+                         "s3:GetObject*",
+                         "s3:ListMultipartUploadParts",
+                         "s3:PutObject*",
+                         "s3:RestoreObject*"
+                      ],
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": "*",
+                      "Condition": {
+                         "StringNotEquals": {
+                            "s3:DataAccessPointAccount": null
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockPutobjectIfObjectlockUnauthorizedRetentionMaximum",
+                      "Action": [
+                         "s3:PutObject",
+                         "s3:PutObjectRetention"
+                      ],
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": "*",
+                      "Condition": {
+                         "NumericGreaterThan": {
+                            "s3:object-lock-remaining-retention-days": 7
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockPutobjectIfObjectlockUnauthorizedRetentionMaximum",
+                      "Action": [
+                         "s3:PutObject",
+                         "s3:PutObjectRetention"
+                      ],
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": "*",
+                      "Condition": {
+                         "NumericLessThan": {
+                            "s3:object-lock-remaining-retention-days": 7
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockPutobjectIfObjectlockUnauthorizedMode",
+                      "Action": [
+                         "s3:PutObject",
+                         "s3:PutObjectRetention"
+                      ],
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": "*",
+                      "Condition": {
+                         "StringNotEquals": {
+                            "s3:object-lock-mode": "COMPLIANCE"
+                         }
+                      }
+                   }
+                ]
+             }
+          }
+       },
+       "S3Bucket3": {
+          "Type": "AWS::S3::Bucket",
+          "Properties": {
+             "BucketName": "configrules-compliancecheck-yyz-4"
+          }
+       },
+       "S3Bucket3Policy": {
+          "Type": "AWS::S3::BucketPolicy",
+          "Properties": {
+             "Bucket": null,
+             "PolicyDocument": {
+                "Version": "2012-10-17T00:00:00.000Z",
+                "Statement": [
+                   {
+                      "Sid": "BlockIfNotFromAuthorizedVpce",
+                      "Principal": "*",
+                      "Action": [
+                         "s3:GetObject*",
+                         "s3:PutObject*"
+                      ],
+                      "Effect": "Deny",
+                      "Resource": [
+                         "arn:aws:s3:::configrules-compliancecheck-yyz-4",
+                         "arn:aws:s3:::configrules-compliancecheck-yyz-4/*"
+                      ],
+                      "Condition": {
+                         "StringNotEquals": {
+                            "aws:SourceVpce": null
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockIfNotFromAuthorizedVpc",
+                      "Principal": "*",
+                      "Action": [
+                         "s3:GetObject*",
+                         "s3:PutObject*"
+                      ],
+                      "Effect": "Deny",
+                      "Resource": [
+                         "arn:aws:s3:::configrules-compliancecheck-yyz-4",
+                         "arn:aws:s3:::configrules-compliancecheck-yyz-4/*"
+                      ],
+                      "Condition": {
+                         "StringNotEquals": {
+                            "aws:SourceVpc": null
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockPutobjectIfRemoteAccountNotAuthorizedMultiple",
+                      "Action": "s3:PutObject",
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": "*",
+                      "Condition": {
+                         "StringNotLike": {
+                            "s3:x-amz-server-side-encryption-aws-kms-key-id": [
+                               null,
+                               null
+                            ]
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockUnlessSsecEncryptedAllPrefixes",
+                      "Effect": "Deny",
+                      "Principal": "*",
+                      "Action": "s3:PutObject",
+                      "Resource": "arn:aws:s3:::configrules-compliancecheck-yyz-4/*",
+                      "Condition": {
+                         "Null": {
+                            "s3:x-amz-server-side-encryption-customer-algorithm": "false"
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockUnlessSsecEncryptedSinglePrefix",
+                      "Effect": "Deny",
+                      "Principal": "*",
+                      "Action": "s3:PutObject",
+                      "Resource": "arn:aws:s3:::configrules-compliancecheck-yyz-4/some-prefix/*",
+                      "Condition": {
+                         "Null": {
+                            "s3:x-amz-server-side-encryption-customer-algorithm": "false"
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockUnlessSsecEncryptedTwoPrefixes",
+                      "Effect": "Deny",
+                      "Principal": "*",
+                      "Action": "s3:PutObject",
+                      "Resource": [
+                         "arn:aws:s3:::configrules-compliancecheck-yyz-4/some-prefix/*",
+                         "arn:aws:s3:::configrules-compliancecheck-yyz-4/another-prefix/*"
+                      ],
+                      "Condition": {
+                         "Null": {
+                            "s3:x-amz-server-side-encryption-customer-algorithm": "false"
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockUnlessFromLocalVpceSingle",
+                      "Effect": "Deny",
+                      "Principal": "*",
+                      "Action": [
+                         "s3:*Object"
+                      ],
+                      "Resource": null,
+                      "Condition": {
+                         "StringNotEquals": {
+                            "aws:SourceVpce": null
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockMakingObjectsPublicViaAcl1",
+                      "Action": "s3:PutObjectAcl",
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": "*",
+                      "Condition": {
+                         "StringEquals": {
+                            "s3:x-amz-grant-full-control": [
+                               "http://acs.amazonaws.com/groups/global/AllUsers",
+                               "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+                            ]
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockMakingObjectsPublicViaAcl2",
+                      "Action": "s3:PutObjectAcl",
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": "*",
+                      "Condition": {
+                         "StringEquals": {
+                            "s3:x-amz-grant-read": [
+                               "http://acs.amazonaws.com/groups/global/AllUsers",
+                               "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+                            ],
+                            "s3:x-amz-grant-read-acp": [
+                               "http://acs.amazonaws.com/groups/global/AllUsers",
+                               "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+                            ]
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockMakingObjectsPublicViaAcl3",
+                      "Action": "s3:PutObjectAcl",
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": "*",
+                      "Condition": {
+                         "StringEquals": {
+                            "s3:x-amz-grant-write-acp": [
+                               "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+                            ]
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockMakingObjectsPublicViaAcl3",
+                      "Action": "s3:PutObjectAcl",
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": "*",
+                      "Condition": {
+                         "StringEquals": {
+                            "s3:x-amz-grant-write-acp": "http://acs.amazonaws.com/groups/global/AllUsers"
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockDataplaneAccessNotFromLocalAccesspointNotInVpc",
+                      "Action": [
+                         "s3:AbortMultipartUpload",
+                         "s3:BypassGovernanceRetention",
+                         "s3:DeleteObject*",
+                         "s3:GetObject*",
+                         "s3:ListMultipartUploadParts",
+                         "s3:PutObject*",
+                         "s3:RestoreObject*"
+                      ],
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": "*",
+                      "Condition": {
+                         "StringNotEquals": {
+                            "s3:DataAccessPointArn": null,
+                            "s3:AccessPointNetworkOrigin": "VPC"
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "DelegateAccessToS3LocalAccessPointByAccount",
+                      "Action": "*",
+                      "Effect": "Allow",
+                      "Resource": [
+                         null,
+                         null
+                      ],
+                      "Principal": {
+                         "AWS": "*"
+                      },
+                      "Condition": {
+                         "StringEquals": {
+                            "s3:DataAccessPointAccount": [
+                               null
+                            ]
+                         }
+                      }
+                   }
+                ]
+             }
+          }
+       },
+       "S3Bucket3AccessPoint": {
+          "Type": "AWS::S3::AccessPoint",
+          "Properties": {
+             "Bucket": null,
+             "Name": "access-point-bucket3",
+             "Policy": {
+                "Version": "2012-10-17T00:00:00.000Z",
+                "Statement": [
+                   {
+                      "Sid": "BlockUnlessFromLocalVpceMultiple",
+                      "Action": [
+                         "s3:PutObject",
+                         "s3:GetObject*"
+                      ],
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": {
+                         "AWS": "*"
+                      },
+                      "Condition": {
+                         "StringNotEquals": {
+                            "aws:SourceVpce": [
+                               null,
+                               null
+                            ]
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockUnlessFromVpcMultiple",
+                      "Action": "s3:*",
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": {
+                         "AWS": "*"
+                      },
+                      "Condition": {
+                         "StringNotEquals": {
+                            "aws:SourceVpc": [
+                               null,
+                               null
+                            ]
+                         }
+                      }
+                   }
+                ]
+             },
+             "PublicAccessBlockConfiguration": {
+                "BlockPublicAcls": true,
+                "BlockPublicPolicy": true,
+                "IgnorePublicAcls": true,
+                "RestrictPublicBuckets": true
+             }
+          }
+       },
+       "S3BucketForReplication": {
+          "Type": "AWS::S3::Bucket",
+          "Properties": {
+             "BucketName": "configrules-compliancecheck-repl-yyz",
+             "VersioningConfiguration": {
+                "Status": "Enabled"
+             }
+          }
+       },
+       "S3Bucket1IamRole": {
+          "Type": "AWS::IAM::Role",
+          "Properties": {
+             "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17T00:00:00.000Z",
+                "Statement": [
+                   {
+                      "Effect": "Allow",
+                      "Principal": {
+                         "Service": [
+                            "s3.amazonaws.com"
+                         ]
+                      },
+                      "Action": [
+                         "sts:AssumeRole"
+                      ],
+                      "Condition": {
+                         "StringEquals": {
+                            "aws:SourceAccount": null
+                         }
+                      }
+                   }
+                ]
+             }
+          }
+       },
+       "S3Bucket4": {
+          "Type": "AWS::S3::Bucket",
+          "Properties": {
+             "BucketName": "configrules-compliancecheck-yyz-5"
+          }
+       },
+       "S3BucketInventoryTarget": {
+          "Type": "AWS::S3::Bucket",
+          "Properties": {
+             "BucketName": "configrules-compliancecheck-inventory"
+          }
+       },
+       "S3BucketInventorySource": {
+          "Type": "AWS::S3::Bucket",
+          "Properties": {
+             "BucketName": "configrules-compliancecheck-inventory-source",
+             "InventoryConfigurations": [
+                {
+                   "Id": "some-inventory-configuration",
+                   "Destination": {
+                      "BucketAccountId": null,
+                      "BucketArn": null,
+                      "Format": "CSV"
+                   },
+                   "Enabled": true,
+                   "IncludedObjectVersions": "All",
+                   "OptionalFields": [
+                      "EncryptionStatus"
+                   ],
+                   "ScheduleFrequency": "Daily"
+                }
+             ]
+          }
+       },
+       "TestIamRole1": {
+          "Type": "AWS::IAM::Role",
+          "Properties": {
+             "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17T00:00:00.000Z",
+                "Statement": [
+                   {
+                      "Effect": "Allow",
+                      "Principal": {
+                         "AWS": null
+                      },
+                      "Action": "sts:AssumeRole",
+                      "Condition": {
+                         "StringEquals": {
+                            "aws:SourceAccount": null
+                         }
+                      }
+                   }
+                ]
+             },
+             "Policies": [
+                {
+                   "PolicyName": "deny-all",
+                   "PolicyDocument": {
+                      "Version": "2012-10-17T00:00:00.000Z",
+                      "Statement": [
+                         {
+                            "Effect": "Deny",
+                            "Action": "*",
+                            "Resource": "*"
+                         }
+                      ]
+                   }
+                }
+             ]
+          }
+       },
+       "TestIamRole2": {
+          "Type": "AWS::IAM::Role",
+          "Properties": {
+             "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17T00:00:00.000Z",
+                "Statement": [
+                   {
+                      "Effect": "Allow",
+                      "Principal": {
+                         "AWS": null
+                      },
+                      "Action": "sts:AssumeRole",
+                      "Condition": {
+                         "StringEquals": {
+                            "aws:SourceAccount": null
+                         }
+                      }
+                   }
+                ]
+             },
+             "Policies": [
+                {
+                   "PolicyName": "deny-all",
+                   "PolicyDocument": {
+                      "Version": "2012-10-17T00:00:00.000Z",
+                      "Statement": [
+                         {
+                            "Effect": "Deny",
+                            "Action": "*",
+                            "Resource": "*"
+                         }
+                      ]
+                   }
+                }
+             ]
+          }
+       },
+       "TestIamUser1": {
+          "Type": "AWS::IAM::User",
+          "Properties": {
+             "Policies": [
+                {
+                   "PolicyName": "deny-all",
+                   "PolicyDocument": {
+                      "Version": "2012-10-17T00:00:00.000Z",
+                      "Statement": [
+                         {
+                            "Effect": "Deny",
+                            "Action": "*",
+                            "Resource": "*"
+                         }
+                      ]
+                   }
+                }
+             ]
+          }
+       },
+       "LambdaFunction1": {
+          "Type": "AWS::Lambda::Function",
+          "Properties": {
+             "Role": null,
+             "Runtime": "python3.8",
+             "Handler": "index.handler",
+             "Code": {
+                "ZipFile": "exit 1\n"
+             }
+          }
+       },
+       "LambdaPermission": {
+          "Type": "AWS::Lambda::Permission",
+          "Properties": {
+             "FunctionName": null,
+             "Action": "lambda:InvokeFunction",
+             "Principal": "s3.amazonaws.com",
+             "SourceAccount": null,
+             "SourceArn": "arn:aws:s3:::configrules-compliancecheck-yyz-11"
+          }
+       },
+       "LambdaFunctionIamRole": {
+          "Type": "AWS::IAM::Role",
+          "Properties": {
+             "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17T00:00:00.000Z",
+                "Statement": [
+                   {
+                      "Effect": "Allow",
+                      "Principal": {
+                         "Service": [
+                            "lambda.amazonaws.com"
+                         ]
+                      },
+                      "Action": [
+                         "sts:AssumeRole"
+                      ]
+                   }
+                ]
+             },
+             "Policies": [
+                {
+                   "PolicyName": "s3-lambda-object-accesspoint",
+                   "PolicyDocument": {
+                      "Version": "2012-10-17",
+                      "Statement": [
+                         {
+                            "Effect": "Allow",
+                            "Action": "s3-object-lambda:WriteGetObjectResponse",
+                            "Resource": "*"
+                         }
+                      ]
+                   }
+                },
+                {
+                   "PolicyName": "s3-lambda-object-accesspoint-bucket-access",
+                   "PolicyDocument": {
+                      "Version": "2012-10-17",
+                      "Statement": [
+                         {
+                            "Effect": "Allow",
+                            "Action": [
+                               "s3:GetObject",
+                               "s3:ListBucket"
+                            ],
+                            "Resource": [
+                               "arn:aws:s3:::configrules-compliancecheck-yyz-11",
+                               "arn:aws:s3:::configrules-compliancecheck-yyz-11/*"
+                            ]
+                         }
+                      ]
+                   }
+                }
+             ]
+          }
+       },
+       "SnsTopic1": {
+          "Type": "AWS::SNS::Topic"
+       },
+       "SnsTopicPolicy": {
+          "Type": "AWS::SNS::TopicPolicy",
+          "Properties": {
+             "PolicyDocument": {
+                "Version": "2012-10-17T00:00:00.000Z",
+                "Statement": [
+                   {
+                      "Effect": "Allow",
+                      "Principal": {
+                         "Service": "s3.amazonaws.com"
+                      },
+                      "Action": "sns:Publish",
+                      "Resource": null,
+                      "Condition": {
+                         "ArnLike": {
+                            "aws:SourceArn": "arn:aws:s3:::configrules-compliancecheck-yyz-11"
+                         },
+                         "StringEquals": {
+                            "aws:SourceAccount": null
+                         }
+                      }
+                   }
+                ]
+             },
+             "Topics": [
+                null
+             ]
+          }
+       },
+       "SqsQueue1": {
+          "Type": "AWS::SQS::Queue"
+       },
+       "SqsQueuePolicy": {
+          "Type": "AWS::SQS::QueuePolicy",
+          "Properties": {
+             "Queues": [
+                null
+             ],
+             "PolicyDocument": {
+                "Statement": [
+                   {
+                      "Action": "sqs:SendMessage",
+                      "Effect": "Allow",
+                      "Resource": "*",
+                      "Principal": {
+                         "Service": "s3.amazonaws.com"
+                      },
+                      "Condition": {
+                         "ArnLike": {
+                            "aws:SourceArn": "arn:aws:s3:::configrules-compliancecheck-yyz-11"
+                         },
+                         "StringEquals": {
+                            "aws:SourceAccount": null
+                         }
+                      }
+                   }
+                ]
+             }
+          }
+       },
+       "KmsKey1": {
+          "Type": "AWS::KMS::Key",
+          "Properties": {
+             "EnableKeyRotation": false,
+             "KeyPolicy": {
+                "Version": "2012-10-17T00:00:00.000Z",
+                "Statement": [
+                   {
+                      "Effect": "Allow",
+                      "Principal": {
+                         "AWS": null
+                      },
+                      "Action": "kms:*",
+                      "Resource": "*"
+                   }
+                ]
+             }
+          }
+       },
+       "GurdDutyDetector": {
+          "Condition": "GuardDutyDetectorEnabled",
+          "Type": "AWS::GuardDuty::Detector",
+          "Properties": {
+             "DataSources": {
+                "S3Logs": {
+                   "Enable": true
+                }
+             },
+             "Enable": true,
+             "FindingPublishingFrequency": "SIX_HOURS"
+          }
+       },
+       "Vpc1": {
+          "Type": "AWS::EC2::VPC",
+          "Properties": {
+             "CidrBlock": "10.0.0.0/26",
+             "EnableDnsSupport": false,
+             "EnableDnsHostnames": false
+          }
+       },
+       "Vpc1Subnet1": {
+          "Type": "AWS::EC2::Subnet",
+          "Properties": {
+             "VpcId": null,
+             "CidrBlock": "10.0.0.0/28",
+             "AvailabilityZone": null
+          }
+       },
+       "Vpc1Subnet2": {
+          "Type": "AWS::EC2::Subnet",
+          "Properties": {
+             "VpcId": null,
+             "CidrBlock": "10.0.0.16/28",
+             "AvailabilityZone": null
+          }
+       },
+       "Vpc2": {
+          "Type": "AWS::EC2::VPC",
+          "Properties": {
+             "CidrBlock": "10.0.0.0/26",
+             "EnableDnsSupport": false,
+             "EnableDnsHostnames": false
+          }
+       },
+       "S3InterfaceEndpoint": {
+          "Type": "AWS::EC2::VPCEndpoint",
+          "Properties": {
+             "VpcEndpointType": "Interface",
+             "SecurityGroupIds": [
+                null
+             ],
+             "ServiceName": null,
+             "SubnetIds": [
+                null,
+                null
+             ],
+             "PolicyDocument": {
+                "Version": "2012-10-17T00:00:00.000Z",
+                "Statement": [
+                   {
+                      "Sid": "BlockMakingObjectsPublicViaAclSingleStatement",
+                      "Action": "s3:PutObjectAcl",
+                      "Effect": "Deny",
+                      "Resource": "*",
+                      "Principal": "*",
+                      "Condition": {
+                         "StringEquals": {
+                            "s3:x-amz-grant-full-control": [
+                               "http://acs.amazonaws.com/groups/global/AllUsers",
+                               "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+                            ],
+                            "s3:x-amz-grant-read": [
+                               "http://acs.amazonaws.com/groups/global/AllUsers",
+                               "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+                            ],
+                            "s3:x-amz-grant-read-acp": [
+                               "http://acs.amazonaws.com/groups/global/AllUsers",
+                               "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+                            ],
+                            "s3:x-amz-grant-write-acp": [
+                               "http://acs.amazonaws.com/groups/global/AllUsers",
+                               "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+                            ]
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockPutbucketacl",
+                      "Action": "s3:PutBucketAcl",
+                      "Effect": "Deny",
+                      "Resource": "*",
+                      "Principal": "*"
+                   },
+                   {
+                      "Sid": "DelegateAccessToS3LocalAccessPointByAccount",
+                      "Action": "*",
+                      "Effect": "Allow",
+                      "Resource": "*",
+                      "Principal": {
+                         "AWS": "*"
+                      },
+                      "Condition": {
+                         "StringEquals": {
+                            "s3:DataAccessPointAccount": [
+                               null
+                            ]
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockUnauthorizedBuckets",
+                      "Action": "*",
+                      "Effect": "Deny",
+                      "NotResource": [
+                         null,
+                         null
+                      ],
+                      "Principal": {
+                         "AWS": "*"
+                      }
+                   },
+                   {
+                      "Sid": "BlockUnauthorizedS3Accounts",
+                      "Action": "*",
+                      "Effect": "Deny",
+                      "Resource": "*",
+                      "Principal": {
+                         "AWS": "*"
+                      },
+                      "Condition": {
+                         "StringNotEquals": {
+                            "s3:ResourceAccount": [
+                               null,
+                               null
+                            ]
+                         }
+                      }
+                   }
+                ]
+             },
+             "VpcId": null
+          }
+       },
+       "S3GatewayEndpoint": {
+          "Type": "AWS::EC2::VPCEndpoint",
+          "Properties": {
+             "VpcEndpointType": "Gateway",
+             "ServiceName": null,
+             "PolicyDocument": {
+                "Version": "2012-10-17T00:00:00.000Z",
+                "Statement": [
+                   {
+                      "Sid": "BlockHttpOnly",
+                      "Action": "*",
+                      "Effect": "Deny",
+                      "Resource": null,
+                      "Principal": "*",
+                      "Condition": {
+                         "Bool": {
+                            "aws:SecureTransport": "false"
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockUnauthorizedOrganization",
+                      "Action": "*",
+                      "Effect": "Deny",
+                      "Resource": "*",
+                      "Principal": "*",
+                      "Condition": {
+                         "StringNotEquals": {
+                            "aws:PrincipalOrgId": null
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockUnauthorizedTlsVersionsMultipleElements",
+                      "Action": [
+                         "*",
+                         "s3:*",
+                         "s3:Get*"
+                      ],
+                      "Effect": "Deny",
+                      "Resource": [
+                         null,
+                         null
+                      ],
+                      "Principal": {
+                         "AWS": [
+                            null,
+                            "*"
+                         ]
+                      },
+                      "Condition": {
+                         "NumericLessThan": {
+                            "s3:TlsVersion": 1.2
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockPutobjectIfRemoteAccountNotAuthorizedMultiple",
+                      "Action": "s3:PutObject",
+                      "Effect": "Deny",
+                      "Resource": "*",
+                      "Principal": "*",
+                      "Condition": {
+                         "StringNotLike": {
+                            "s3:x-amz-server-side-encryption-aws-kms-key-id": [
+                               null,
+                               null
+                            ]
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockMakingObjectsPublicViaAcl1",
+                      "Action": "s3:PutObjectAcl",
+                      "Effect": "Deny",
+                      "Resource": "*",
+                      "Principal": "*",
+                      "Condition": {
+                         "StringEquals": {
+                            "s3:x-amz-grant-full-control": [
+                               "http://acs.amazonaws.com/groups/global/AllUsers",
+                               "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+                            ]
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockMakingObjectsPublicViaAcl2",
+                      "Action": "s3:PutObjectAcl",
+                      "Effect": "Deny",
+                      "Resource": "*",
+                      "Principal": "*",
+                      "Condition": {
+                         "StringEquals": {
+                            "s3:x-amz-grant-read": [
+                               "http://acs.amazonaws.com/groups/global/AllUsers",
+                               "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+                            ],
+                            "s3:x-amz-grant-read-acp": [
+                               "http://acs.amazonaws.com/groups/global/AllUsers",
+                               "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+                            ]
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockMakingObjectsPublicViaAcl3",
+                      "Action": "s3:PutObjectAcl",
+                      "Effect": "Deny",
+                      "Resource": "arn:aws:s3:::*/*",
+                      "Principal": "*",
+                      "Condition": {
+                         "StringEquals": {
+                            "s3:x-amz-grant-write-acp": [
+                               "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+                            ]
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockMakingObjectsPublicViaAcl3",
+                      "Action": "s3:PutObjectAcl",
+                      "Effect": "Deny",
+                      "Resource": "arn:aws:s3:::*",
+                      "Principal": "*",
+                      "Condition": {
+                         "StringEquals": {
+                            "s3:x-amz-grant-write-acp": "http://acs.amazonaws.com/groups/global/AllUsers"
+                         }
+                      }
+                   },
+                   {
+                      "Sid": "BlockPutbucketacl",
+                      "Action": "s3:PutBucketAcl",
+                      "Effect": "Deny",
+                      "Resource": "*",
+                      "Principal": "*"
+                   },
+                   {
+                      "Sid": "DelegateAccessToS3LocalAccessPoint",
+                      "Action": "*",
+                      "Effect": "Allow",
+                      "Resource": "*",
+                      "Principal": {
+                         "AWS": "*"
+                      },
+                      "Condition": {
+                         "StringEquals": {
+                            "s3:DataAccessPointArn": null
+                         }
+                      }
+                   }
+                ]
+             },
+             "VpcId": null
+          }
+       },
+       "S3EndpointsSecurityGroup": {
+          "Type": "AWS::EC2::SecurityGroup",
+          "Properties": {
+             "GroupDescription": "security-group",
+             "VpcId": null,
+             "SecurityGroupIngress": [
+                {
+                   "IpProtocol": "tcp",
+                   "FromPort": 443,
+                   "ToPort": 443,
+                   "CidrIp": null
+                }
+             ],
+             "SecurityGroupEgress": [
+                {
+                   "IpProtocol": "tcp",
+                   "FromPort": 0,
+                   "ToPort": 0,
+                   "CidrIp": "0.0.0.0/32"
+                }
+             ]
+          }
+       }
+    }
+ }
