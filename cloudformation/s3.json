@@ -1,4 +1,5 @@
 {
+    "AWSTemplateFormatVersion" : "2010-09-09",
     "Parameters": {
        "AnotherTrustedValidAccountId1": {
           "Type": "String",
@@ -420,7 +421,7 @@
                    }
                 ]
              },
-             "ObjectLockEnabled": true,
+             "ObjectLockEnabled": false,
              "ObjectLockConfiguration": {
                 "ObjectLockEnabled": "Enabled",
                 "Rule": {
