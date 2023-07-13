@@ -420,7 +420,7 @@
                    }
                 ]
              },
-             "ObjectLockEnabled": true,
+             "ObjectLockEnabled": false,
              "ObjectLockConfiguration": {
                 "ObjectLockEnabled": "Enabled",
                 "Rule": {
